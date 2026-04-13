@@ -523,47 +523,77 @@ function closeGame(){
 function buildGmB(){
   const b=document.getElementById('gmb'),sz=gLv.size;
   b.style.gridTemplateColumns=`repeat(${sz},1fr)`;
-  b.style.gridTemplateRows=`repeat(${sz},1fr)`;b.innerHTML='';
+  b.style.gridTemplateRows=`repeat(${sz},1fr)`;
+  b.innerHTML='';
   for(let r=0;r<sz;r++) for(let c=0;c<sz;c++){
     const el=document.createElement('div');
     el.className='cell';el.dataset.r=r;el.dataset.c=c;
-    el.addEventListener('pointerdown',gmDn);
     b.appendChild(el);
   }
-  // Use pointermove on board to handle touch drag (pointerenter unreliable on mobile)
-  b.addEventListener('pointermove',gmMove);
-  document.addEventListener('pointerup',()=>{gDraw=false;checkWin();});
+  // Unified input: mouse for PC, touch for mobile
+  b.addEventListener('mousedown', onBoardMouseDown);
+  b.addEventListener('mousemove', onBoardMouseMove);
+  document.addEventListener('mouseup', onBoardUp);
+  b.addEventListener('touchstart', onBoardTouchStart, {passive:false});
+  b.addEventListener('touchmove',  onBoardTouchMove,  {passive:false});
+  b.addEventListener('touchend',   onBoardTouchEnd,   {passive:false});
   rGm();
 }
 
-function gmMove(e){
-  if(!gDraw||!gAct||gOv)return;
-  e.preventDefault();
-  // elementFromPoint may return a child (svg, dc) — walk up to find the .cell
-  let el=document.elementFromPoint(e.clientX,e.clientY);
-  while(el&&!el.classList.contains('cell'))el=el.parentElement;
-  if(!el||el.dataset.r===undefined)return;
-  gmEn({currentTarget:el});
+function cellAt(x, y){
+  const el = document.elementFromPoint(x, y);
+  if(!el) return null;
+  if(el.classList.contains('cell')) return el;
+  const p = el.closest('.cell');
+  return p || null;
 }
 
-function gmDn(e){
-  e.preventDefault();if(gOv)return;
-  // Release pointer capture so pointermove+elementFromPoint works across cells on mobile
-  try{e.currentTarget.releasePointerCapture(e.pointerId);}catch(_){}
-  const r=+e.currentTarget.dataset.r,c=+e.currentTarget.dataset.c,k=r+','+c;
-  const dc=gDots[k];
-  const gc=gGr[k];
-  const col=dc||gc;
-  if(!col)return;
+function onBoardMouseDown(e){
+  if(gOv) return;
+  const cell = cellAt(e.clientX, e.clientY);
+  if(cell) startCell(cell);
+}
+function onBoardMouseMove(e){
+  if(!gDraw||!gAct||gOv) return;
+  const cell = cellAt(e.clientX, e.clientY);
+  if(cell) moveCell(cell);
+}
+
+function onBoardTouchStart(e){
+  e.preventDefault();
+  if(gOv) return;
+  const t = e.changedTouches[0];
+  const cell = cellAt(t.clientX, t.clientY);
+  if(cell) startCell(cell);
+}
+function onBoardTouchMove(e){
+  e.preventDefault();
+  if(!gDraw||!gAct||gOv) return;
+  const t = e.changedTouches[0];
+  const cell = cellAt(t.clientX, t.clientY);
+  if(cell) moveCell(cell);
+}
+function onBoardTouchEnd(e){
+  e.preventDefault();
+  gDraw=false;
+  checkWin();
+}
+function onBoardUp(){
+  gDraw=false;
+  checkWin();
+}
+
+function startCell(el){
+  const r=+el.dataset.r, c=+el.dataset.c, k=r+','+c;
+  const dc=gDots[k], gc=gGr[k], col=dc||gc;
+  if(!col) return;
 
   const path=gPaths[col]||[];
-  const head=path[0],tail=path[path.length-1];
+  const head=path[0], tail=path[path.length-1];
   const isComplete=path.length>=2&&gDots[head]&&gDots[tail];
 
   if(isComplete){
-    if(k===tail){
-      gAct=col;gDraw=true;rGm();updFill();return;
-    }
+    if(k===tail){ gAct=col;gDraw=true;rGm();updFill();return; }
     if(k===head){
       const removed=path.splice(1);
       removed.forEach(rk=>{if(gGr[rk]===col)delete gGr[rk];});
@@ -582,9 +612,7 @@ function gmDn(e){
     clrPath(col);gPaths[col]=[k];gGr[k]=col;
     gAct=col;gDraw=true;rGm();updFill();return;
   }
-  if(k===tail){
-    gAct=col;gDraw=true;rGm();updFill();return;
-  }
+  if(k===tail){ gAct=col;gDraw=true;rGm();updFill();return; }
   if(k===head){
     const removed=path.splice(1);
     removed.forEach(rk=>{if(gGr[rk]===col)delete gGr[rk];});
@@ -600,19 +628,19 @@ function gmDn(e){
     gAct=col;gDraw=true;rGm();updFill();
   }
 }
-function gmEn(e){
-  if(!gDraw||!gAct||gOv)return;
-  const r=+e.currentTarget.dataset.r,c=+e.currentTarget.dataset.c,k=r+','+c;
-  const path=gPaths[gAct],last=path[path.length-1];
-  if(!last||!adj(last,k))return;
+
+function moveCell(el){
+  const r=+el.dataset.r, c=+el.dataset.c, k=r+','+c;
+  const path=gPaths[gAct], last=path[path.length-1];
+  if(!last||!adj(last,k)) return;
   if(path.length>=2&&path[path.length-2]===k){
     const rem=path.pop();
-    if(gDots[rem]!==gAct)delete gGr[rem];
+    if(gDots[rem]!==gAct) delete gGr[rem];
     rGm();updFill();return;
   }
-  if(gGr[k]===gAct)return;
+  if(gGr[k]===gAct) return;
   if(gGr[k]&&gGr[k]!==gAct){
-    if(gDots[k]&&gDots[k]!==gAct)return;
+    if(gDots[k]&&gDots[k]!==gAct) return;
     clrPath(gGr[k]);
   }
   path.push(k);gGr[k]=gAct;rGm();updFill();
