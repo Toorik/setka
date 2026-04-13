@@ -42,7 +42,7 @@ nav {
 .nb.on { color:var(--text); }
 .nav-ink {
   position:absolute; bottom:0; left:0; height:2px;
-  background:var(--accent); width:50%; border-radius:1px 1px 0 0;
+  background:var(--accent); width:33.33%; border-radius:1px 1px 0 0;
   transition:transform var(--tr); will-change:transform;
 }
 
@@ -95,17 +95,12 @@ nav {
   background:var(--border); border:2px solid var(--border);
   border-radius:10px; overflow:hidden; touch-action:none;
 }
-#sc0 .board {
-  width:min(calc(100vw - 24px), calc(100dvh - 200px));
-  height:min(calc(100vw - 24px), calc(100dvh - 200px));
-}
 .cell {
   background:var(--s2); display:flex; align-items:center; justify-content:center;
   position:relative; cursor:pointer; aspect-ratio:1/1;
   container-type:size; touch-action:none;
 }
 .dc {
-  /* Use absolute square anchored to the smaller dimension via min() so it stays circular */
   position:absolute; z-index:2; pointer-events:none;
   width:min(58cqw,58cqh); height:min(58cqw,58cqh);
   border-radius:50%;
@@ -200,9 +195,9 @@ nav {
 
 /* game modal */
 .gmc {
-  background:var(--s1); width:100vw; height:100dvh;
+  background:var(--s1);
+  width:100vw; height:100dvh;
   display:flex; flex-direction:column; overflow:hidden;
-  animation:sU .28s cubic-bezier(.3,1.4,.5,1);
 }
 .gmhud {
   flex-shrink:0; padding:10px 14px; display:flex; align-items:center;
@@ -211,27 +206,30 @@ nav {
 }
 .gmbwrap {
   flex:1; display:flex; align-items:center; justify-content:center;
-  padding:14px; min-height:0; overflow:hidden; touch-action:none;
+  padding:10px; min-height:0; overflow:hidden; touch-action:none;
 }
 .gmbwrap .board {
   width:min(calc(100vw - 20px), calc(100dvh - 76px));
   height:min(calc(100vw - 20px), calc(100dvh - 76px));
+}
+#sc0 .board {
+  width:min(calc(100vw - 24px), calc(100dvh - 200px));
+  height:min(calc(100vw - 24px), calc(100dvh - 200px));
 }
 </style>
 </head>
 <body>
 <div id="app">
 
-<nav>
+<nav style="display:none">
   <button class="nb on" onclick="go(0)" id="nb0">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
     Редактор
   </button>
-  <button class="nb" onclick="go(1)" id="nb1">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="16" y2="12"/><line x1="4" y1="18" x2="12" y2="18"/></svg>
-    Уровни
+  <button class="nb" onclick="go(2)" id="nb2">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5,3 19,12 5,21"/></svg>
+    Игра
   </button>
-
   <div class="nav-ink" id="ink"></div>
 </nav>
 
@@ -254,21 +252,8 @@ nav {
     <div class="bwrap"><div class="board" id="edb"></div></div>
     <div class="bar">
       <button class="tb danger" onclick="edClear()">🗑 Очистить</button>
-      <button class="tb" onclick="saveLvl()">💾 Сохранить</button>
-      <button class="tb" onclick="expLvl()">↑ JSON</button>
-      <button class="tb" onclick="fi1.click()">↓ JSON</button>
-      <input type="file" id="fi1" accept=".json" onchange="impLvl(event)">
       <button class="tb hi" onclick="testPlay()">▶ Тест</button>
     </div>
-  </div>
-
-  <!-- LEVELS -->
-  <div class="scr" id="sc1">
-    <div class="lvh">
-      <button class="tb" style="flex:1" onclick="fi2.click()">↓ Импорт уровня</button>
-      <input type="file" id="fi2" accept=".json" onchange="impToList(event)">
-    </div>
-    <div class="s-body"><div class="lv-list" id="lvl"></div></div>
   </div>
   </div>
 
@@ -316,31 +301,11 @@ const CH={}; COLS.forEach(c=>CH[c.id]=c.h);
 
 // ── NAV ──
 let cur=0;
-const SCS=[0,1].map(i=>document.getElementById('sc'+i));
-const NBS=[0,1].map(i=>document.getElementById('nb'+i));
+const SCS=[document.getElementById('sc0')];
+const NBS=[document.getElementById('nb0')];
 const INK=document.getElementById('ink');
 
-function go(idx) {
-  if(idx===cur) return;
-  const dir=idx>cur?1:-1, prev=cur; cur=idx;
-  SCS[prev].style.transition='none';
-  SCS[prev].classList.remove('active');
-  SCS[prev].style.transform=dir>0?'translateX(-40%)':'translateX(100%)';
-  SCS[prev].style.opacity='0';
-  SCS[idx].style.transition='none';
-  SCS[idx].style.transform=dir>0?'translateX(100%)':'translateX(-40%)';
-  SCS[idx].style.opacity='0';
-  SCS[idx].classList.remove('active');
-  requestAnimationFrame(()=>requestAnimationFrame(()=>{
-    SCS[prev].style.transition='';
-    SCS[idx].style.transition='';
-    SCS[idx].classList.add('active');
-    setTimeout(()=>{ SCS[prev].style.transform=''; SCS[prev].style.opacity=''; }, 420);
-  }));
-  NBS.forEach((b,i)=>b.classList.toggle('on',i===idx));
-  INK.style.transform=`translateX(${idx*100}%)`;
-  if(idx===1) renderList();
-}
+function go(idx){}
 
 
 // ═══════════════ EDITOR ═══════════════
@@ -409,7 +374,7 @@ function rEdB(){
 function edClear(){if(confirm('Очистить поле?')){edG={};rEdB();}}
 
 // ── Save / Export / Import ──
-let levels=[], sRecs={};
+let sRecs={};
 
 function validate(){
   const cnt={};
@@ -420,38 +385,10 @@ function validate(){
   return true;
 }
 
-function saveLvl(){
-  if(!validate()) return;
-  const nm=prompt('Название уровня:','Уровень '+(levels.length+1));
-  if(!nm) return;
-  levels.push({id:Date.now().toString(),name:nm.trim(),size:edSz,dots:{...edG}});
-  alert('Уровень сохранён!');
-  renderList();
-}
 
-function expLvl(){dl(JSON.stringify({size:edSz,dots:edG},null,2),'flow_level.json');}
 
-function impLvl(e){
-  const f=e.target.files[0]; if(!f) return;
-  rj(f,d=>{
-    if(!d.size||!d.dots){alert('Неверный формат');return;}
-    edSz=d.size;edG=d.dots;buildSz();buildEdB();
-  });
-  e.target.value='';
-}
 
-function impToList(e){
-  const f=e.target.files[0]; if(!f) return;
-  rj(f,d=>{
-    if(!d.size||!d.dots){alert('Неверный формат');return;}
-    levels.push({id:Date.now().toString(),name:d.name||('Импорт '+(levels.length+1)),size:d.size,dots:d.dots});
-    renderList();
-  });
-  e.target.value='';
-}
 
-function rj(file,cb){const r=new FileReader();r.onload=ev=>{try{cb(JSON.parse(ev.target.result));}catch{alert('Ошибка JSON');}};r.readAsText(file);}
-function dl(txt,name){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([txt],{type:'application/json'}));a.download=name;a.click();}
 
 function testPlay(){
   if(!validate()) return;
@@ -460,40 +397,8 @@ function testPlay(){
 }
 
 // ── Level List ──
-function renderList(){
-  const l=document.getElementById('lvl');
-  if(!levels.length){
-    l.innerHTML=`<div class="empty"><div class="ei">🎨</div><div class="et">Уровней пока нет.<br>Создайте в редакторе<br>или импортируйте JSON.</div></div>`;
-    return;
-  }
-  l.innerHTML='';
-  levels.forEach(lv=>{
-    const rec=sRecs[lv.id], cols=[...new Set(Object.values(lv.dots))];
-    const el=document.createElement('div'); el.className='lvi';
-    el.innerHTML=`${msvg(lv)}<div style="flex:1;min-width:0"><div class="lvn">${esc(lv.name)}</div><div class="lvm">${lv.size}×${lv.size} · ${cols.length} цветов</div>${rec?`<div class="lvr">⏱ ${rec.toFixed(1)}s</div>`:''}</div>
-    <div class="lva">
-      <button class="pbtn" onclick="startLv('${lv.id}')">▶</button>
-      <button class="tb" style="font-size:9px" onclick="expById('${lv.id}')">↑JSON</button>
-      <button class="tb danger" style="font-size:9px" onclick="delLv('${lv.id}')">🗑</button>
-    </div>`;
-    l.appendChild(el);
-  });
-}
 
-function msvg(lv){
-  const s=lv.size,sz=42,c=sz/s;
-  let d='';
-  Object.entries(lv.dots).forEach(([k,col])=>{
-    const[r,cc]=k.split(',').map(Number);
-    d+=`<circle cx="${cc*c+c/2}" cy="${r*c+c/2}" r="${c*.34}" fill="${CH[col]||'#888'}"/>`;
-  });
-  return `<svg width="${sz}" height="${sz}" viewBox="0 0 ${sz} ${sz}" style="flex-shrink:0;border-radius:6px"><rect width="${sz}" height="${sz}" fill="#18182a" rx="6"/>${d}</svg>`;
-}
 
-function startLv(id){const lv=levels.find(l=>l.id===id);if(!lv)return;loadGame(lv);openGame();}
-function delLv(id){if(!confirm('Удалить?')){return;}levels=levels.filter(l=>l.id!==id);renderList();}
-function expById(id){const lv=levels.find(l=>l.id===id);if(!lv)return;dl(JSON.stringify(lv,null,2),lv.name.replace(/\s+/g,'_')+'.json');}
-function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 
 // ═══════════════ GAME ═══════════════
 let gLv=null,gDots={},gGr={},gPaths={};
@@ -530,7 +435,6 @@ function buildGmB(){
     el.className='cell';el.dataset.r=r;el.dataset.c=c;
     b.appendChild(el);
   }
-  // Unified input: mouse for PC, touch for mobile
   b.addEventListener('mousedown', onBoardMouseDown);
   b.addEventListener('mousemove', onBoardMouseMove);
   document.addEventListener('mouseup', onBoardUp);
@@ -540,109 +444,69 @@ function buildGmB(){
   rGm();
 }
 
-function cellAt(x, y){
-  const el = document.elementFromPoint(x, y);
+function cellAt(x,y){
+  const el=document.elementFromPoint(x,y);
   if(!el) return null;
   if(el.classList.contains('cell')) return el;
-  const p = el.closest('.cell');
-  return p || null;
+  return el.closest('.cell')||null;
 }
 
-function onBoardMouseDown(e){
-  if(gOv) return;
-  const cell = cellAt(e.clientX, e.clientY);
-  if(cell) startCell(cell);
-}
-function onBoardMouseMove(e){
-  if(!gDraw||!gAct||gOv) return;
-  const cell = cellAt(e.clientX, e.clientY);
-  if(cell) moveCell(cell);
-}
+function onBoardMouseDown(e){ if(!gOv){const c=cellAt(e.clientX,e.clientY);if(c)startCell(c);} }
+function onBoardMouseMove(e){ if(gDraw&&gAct&&!gOv){const c=cellAt(e.clientX,e.clientY);if(c)moveCell(c);} }
+function onBoardUp(){ gDraw=false;checkWin(); }
 
 function onBoardTouchStart(e){
   e.preventDefault();
-  if(gOv) return;
-  const t = e.changedTouches[0];
-  const cell = cellAt(t.clientX, t.clientY);
-  if(cell) startCell(cell);
+  if(gOv)return;
+  const t=e.changedTouches[0];
+  const c=cellAt(t.clientX,t.clientY);
+  if(c)startCell(c);
 }
 function onBoardTouchMove(e){
   e.preventDefault();
-  if(!gDraw||!gAct||gOv) return;
-  const t = e.changedTouches[0];
-  const cell = cellAt(t.clientX, t.clientY);
-  if(cell) moveCell(cell);
+  if(!gDraw||!gAct||gOv)return;
+  const t=e.changedTouches[0];
+  const c=cellAt(t.clientX,t.clientY);
+  if(c)moveCell(c);
 }
 function onBoardTouchEnd(e){
   e.preventDefault();
-  gDraw=false;
-  checkWin();
-}
-function onBoardUp(){
-  gDraw=false;
-  checkWin();
+  gDraw=false;checkWin();
 }
 
 function startCell(el){
-  const r=+el.dataset.r, c=+el.dataset.c, k=r+','+c;
-  const dc=gDots[k], gc=gGr[k], col=dc||gc;
-  if(!col) return;
-
+  const r=+el.dataset.r,c=+el.dataset.c,k=r+','+c;
+  const dc=gDots[k],gc=gGr[k],col=dc||gc;
+  if(!col)return;
   const path=gPaths[col]||[];
-  const head=path[0], tail=path[path.length-1];
+  const head=path[0],tail=path[path.length-1];
   const isComplete=path.length>=2&&gDots[head]&&gDots[tail];
-
   if(isComplete){
-    if(k===tail){ gAct=col;gDraw=true;rGm();updFill();return; }
-    if(k===head){
-      const removed=path.splice(1);
-      removed.forEach(rk=>{if(gGr[rk]===col)delete gGr[rk];});
-      gAct=col;gDraw=true;rGm();updFill();return;
-    }
+    if(k===tail){gAct=col;gDraw=true;rGm();updFill();return;}
+    if(k===head){const removed=path.splice(1);removed.forEach(rk=>{if(gGr[rk]===col)delete gGr[rk];});gAct=col;gDraw=true;rGm();updFill();return;}
     const idx=path.indexOf(k);
-    if(idx!==-1){
-      const removed=path.splice(idx+1);
-      removed.forEach(rk=>{if(gGr[rk]===col)delete gGr[rk];});
-      gAct=col;gDraw=true;rGm();updFill();
-    }
+    if(idx!==-1){const removed=path.splice(idx+1);removed.forEach(rk=>{if(gGr[rk]===col)delete gGr[rk];});gAct=col;gDraw=true;rGm();updFill();return;}
     return;
   }
-
-  if(path.length===0){
-    clrPath(col);gPaths[col]=[k];gGr[k]=col;
-    gAct=col;gDraw=true;rGm();updFill();return;
-  }
-  if(k===tail){ gAct=col;gDraw=true;rGm();updFill();return; }
-  if(k===head){
-    const removed=path.splice(1);
-    removed.forEach(rk=>{if(gGr[rk]===col)delete gGr[rk];});
-    gAct=col;gDraw=true;rGm();updFill();return;
-  }
+  if(path.length===0){clrPath(col);gPaths[col]=[k];gGr[k]=col;gAct=col;gDraw=true;rGm();updFill();return;}
+  if(k===tail){gAct=col;gDraw=true;rGm();updFill();return;}
+  if(k===head){const removed=path.splice(1);removed.forEach(rk=>{if(gGr[rk]===col)delete gGr[rk];});gAct=col;gDraw=true;rGm();updFill();return;}
   const idx=path.indexOf(k);
-  if(idx!==-1){
-    const removed=path.splice(idx+1);
-    removed.forEach(rk=>{if(gGr[rk]===col)delete gGr[rk];});
-    gAct=col;gDraw=true;rGm();updFill();
-  } else {
-    clrPath(col);gPaths[col]=[k];gGr[k]=col;
-    gAct=col;gDraw=true;rGm();updFill();
-  }
+  if(idx!==-1){const removed=path.splice(idx+1);removed.forEach(rk=>{if(gGr[rk]===col)delete gGr[rk];});gAct=col;gDraw=true;rGm();updFill();}
+  else{clrPath(col);gPaths[col]=[k];gGr[k]=col;gAct=col;gDraw=true;rGm();updFill();}
 }
 
 function moveCell(el){
-  const r=+el.dataset.r, c=+el.dataset.c, k=r+','+c;
-  const path=gPaths[gAct], last=path[path.length-1];
-  if(!last||!adj(last,k)) return;
+  const r=+el.dataset.r,c=+el.dataset.c,k=r+','+c;
+  const path=gPaths[gAct],last=path[path.length-1];
+  if(!last||!adj(last,k))return;
   if(path.length>=2&&path[path.length-2]===k){
     const rem=path.pop();
-    if(gDots[rem]!==gAct) delete gGr[rem];
+    if(gDots[rem]!==gAct)delete gGr[rem];
     rGm();updFill();return;
   }
-  if(gGr[k]===gAct) return;
-  if(gGr[k]&&gGr[k]!==gAct){
-    if(gDots[k]&&gDots[k]!==gAct) return;
-    clrPath(gGr[k]);
-  }
+  if(gGr[k]===gAct)return;
+  if(gGr[k]&&gGr[k]!==gAct){if(gDots[k]&&gDots[k]!==gAct)return;clrPath(gGr[k]);}
   path.push(k);gGr[k]=gAct;rGm();updFill();
   if(gDots[k]===gAct){gDraw=false;gAct=null;checkWin();}
 }
@@ -736,9 +600,8 @@ function startClock(){
 }
 function stopClock(){if(clkInt){clearInterval(clkInt);clkInt=null;}}
 
-// ── Bootv3 ──
-buildSz();buildPal();buildEdB();renderList();
-INK.style.transform='translateX(0)';
+// ── Boot v4──
+buildSz();buildPal();buildEdB();
 </script>
 </body>
 </html>
