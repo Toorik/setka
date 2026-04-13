@@ -441,6 +441,7 @@ function buildGmB(){
   b.addEventListener('touchstart', onBoardTouchStart, {passive:false});
   b.addEventListener('touchmove',  onBoardTouchMove,  {passive:false});
   b.addEventListener('touchend',   onBoardTouchEnd,   {passive:false});
+  b.addEventListener('touchcancel', onBoardTouchCancel, {passive:false});
   rGm();
 }
 
@@ -453,10 +454,12 @@ function cellAt(x,y){
 
 function onBoardMouseDown(e){ if(!gOv){const c=cellAt(e.clientX,e.clientY);if(c)startCell(c);} }
 function onBoardMouseMove(e){ if(gDraw&&gAct&&!gOv){const c=cellAt(e.clientX,e.clientY);if(c)moveCell(c);} }
-function onBoardUp(){ gDraw=false;checkWin(); }
+function onBoardUp(){ gDraw=false; gAct=null; checkWin(); }
 
 function onBoardTouchStart(e){
   e.preventDefault();
+  // Always reset draw state on new touch to avoid stale state
+  gDraw=false; gAct=null;
   if(gOv)return;
   const t=e.changedTouches[0];
   const c=cellAt(t.clientX,t.clientY);
@@ -465,13 +468,18 @@ function onBoardTouchStart(e){
 function onBoardTouchMove(e){
   e.preventDefault();
   if(!gDraw||!gAct||gOv)return;
+  // Use the touch that matches — handles multi-touch edge cases
   const t=e.changedTouches[0];
   const c=cellAt(t.clientX,t.clientY);
   if(c)moveCell(c);
 }
 function onBoardTouchEnd(e){
   e.preventDefault();
-  gDraw=false;checkWin();
+  gDraw=false; gAct=null;
+  checkWin();
+}
+function onBoardTouchCancel(e){
+  gDraw=false; gAct=null;
 }
 
 function startCell(el){
@@ -600,7 +608,7 @@ function startClock(){
 }
 function stopClock(){if(clkInt){clearInterval(clkInt);clkInt=null;}}
 
-// ── Boot v4──
+// ── Boot5 ──
 buildSz();buildPal();buildEdB();
 </script>
 </body>
