@@ -102,7 +102,7 @@ nav {
 .cell {
   background:var(--s2); display:flex; align-items:center; justify-content:center;
   position:relative; cursor:pointer; aspect-ratio:1/1;
-  container-type:size;
+  container-type:size; touch-action:none;
 }
 .dc {
   /* Use absolute square anchored to the smaller dimension via min() so it stays circular */
@@ -211,7 +211,7 @@ nav {
 }
 .gmbwrap {
   flex:1; display:flex; align-items:center; justify-content:center;
-  padding:14px; min-height:0; overflow:hidden;
+  padding:14px; min-height:0; overflow:hidden; touch-action:none;
 }
 .gmbwrap .board {
   width:min(calc(100vw - 20px), calc(100dvh - 76px));
@@ -528,11 +528,20 @@ function buildGmB(){
     const el=document.createElement('div');
     el.className='cell';el.dataset.r=r;el.dataset.c=c;
     el.addEventListener('pointerdown',gmDn);
-    el.addEventListener('pointerenter',gmEn);
     b.appendChild(el);
   }
+  // Use pointermove on board to handle touch drag (pointerenter unreliable on mobile)
+  b.addEventListener('pointermove',gmMove);
   document.addEventListener('pointerup',()=>{gDraw=false;checkWin();});
   rGm();
+}
+
+function gmMove(e){
+  if(!gDraw||!gAct||gOv)return;
+  e.preventDefault();
+  const el=document.elementFromPoint(e.clientX,e.clientY);
+  if(!el||!el.dataset.r)return;
+  gmEn({currentTarget:el});
 }
 
 function gmDn(e){
