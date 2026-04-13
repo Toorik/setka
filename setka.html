@@ -539,13 +539,17 @@ function buildGmB(){
 function gmMove(e){
   if(!gDraw||!gAct||gOv)return;
   e.preventDefault();
-  const el=document.elementFromPoint(e.clientX,e.clientY);
-  if(!el||!el.dataset.r)return;
+  // elementFromPoint may return a child (svg, dc) — walk up to find the .cell
+  let el=document.elementFromPoint(e.clientX,e.clientY);
+  while(el&&!el.classList.contains('cell'))el=el.parentElement;
+  if(!el||el.dataset.r===undefined)return;
   gmEn({currentTarget:el});
 }
 
 function gmDn(e){
   e.preventDefault();if(gOv)return;
+  // Release pointer capture so pointermove+elementFromPoint works across cells on mobile
+  try{e.currentTarget.releasePointerCapture(e.pointerId);}catch(_){}
   const r=+e.currentTarget.dataset.r,c=+e.currentTarget.dataset.c,k=r+','+c;
   const dc=gDots[k];
   const gc=gGr[k];
