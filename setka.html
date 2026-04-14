@@ -501,36 +501,47 @@ function moveCell(el) {
   const r = +el.dataset.r, c = +el.dataset.c, k = r + ',' + c;
   const path = gPaths[gAct], last = path[path.length - 1];
 
+  // Проверка на соседство (двигаться можно только в соседнюю клетку)
   if (!last || !adj(last, k)) return;
 
-  // 1. Отмена шага (движение назад)
+  // 1. Движение назад (отмена последнего шага)
   if (path.length >= 2 && path[path.length - 2] === k) {
     const rem = path.pop();
     if (!gDots[rem]) delete gGr[rem];
     rGm(); updFill(); return;
   }
 
-  // 2. Если наступили на свой же путь (петля) — игнорируем
-  if (path.includes(k)) return;
+  // 2. ПЕРЕСЕЧЕНИЕ САМОГО СЕБЯ (как в классике)
+  if (path.includes(k)) {
+    const idx = path.indexOf(k);
+    // Находим всё, что было в пути после этой точки
+    const toRemove = path.splice(idx + 1);
+    toRemove.forEach(rk => {
+      // Стираем эти клетки с поля (если это не стартовые точки)
+      if (gGr[rk] === gAct && !gDots[rk]) delete gGr[rk];
+    });
+    rGm(); updFill(); return;
+  }
 
-  // 3. ПЕРЕСЕЧЕНИЕ: Если клетка занята другим цветом
+  // 3. ПЕРЕСЕЧЕНИЕ ЧУЖОГО ПУТИ
   if (gGr[k] && gGr[k] !== gAct) {
     // Если это чужая точка-старт — пересекать нельзя
     if (gDots[k] && gDots[k] !== gAct) return;
     
-    // Вызываем обрезку чужого пути
+    // Обрезаем чужой путь
     cutPath(gGr[k], k);
   }
 
-  // 4. Добавляем клетку в текущий путь
+  // 4. Добавляем новую клетку в путь
   path.push(k);
   gGr[k] = gAct;
   rGm();
   updFill();
 
-  // 5. Проверка завершения линии
+  // 5. Авто-завершение, если дошли до целевой точки
   if (gDots[k] === gAct && k !== path[0]) {
     gDraw = false;
+    // gAct не обнуляем, чтобы можно было подхватить, если палец не поднят
     checkWin();
   }
 }
