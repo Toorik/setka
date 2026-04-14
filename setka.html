@@ -252,7 +252,7 @@ nav {
     <div class="bwrap"><div class="board" id="edb"></div></div>
     <div class="bar">
       <button class="tb danger" onclick="edClear()">🗑 Очистить</button>
-      <button class="tb hi" onclick="testPlay()">▶    Тест!</button>
+      <button class="tb hi" onclick="testPlay()">▶ Тест</button>
     </div>
   </div>
   </div>
@@ -452,26 +452,19 @@ function cellAt(x,y){
   return el.closest('.cell')||null;
 }
 
-let usingTouch=false;
-
 function onBoardMouseDown(e){
-  if(usingTouch)return; // ignore synthetic mouse from touch
   if(!gOv){const c=cellAt(e.clientX,e.clientY);if(c)startCell(c);}
 }
 function onBoardMouseMove(e){
-  if(usingTouch)return;
   if(gDraw&&gAct&&!gOv){const c=cellAt(e.clientX,e.clientY);if(c)moveCell(c);}
 }
 function onBoardUp(){
-  if(usingTouch)return;
   gDraw=false; checkWin();
 }
 
 function onBoardTouchStart(e){
   e.preventDefault();
-  usingTouch=true;
   if(gOv)return;
-  if(gDraw){gDraw=false;gAct=null;}
   const t=e.changedTouches[0];
   const c=cellAt(t.clientX,t.clientY);
   if(c)startCell(c);
@@ -485,20 +478,18 @@ function onBoardTouchMove(e){
 }
 function onBoardTouchEnd(e){
   e.preventDefault();
-  gDraw=false;
+  // Do NOT reset gDraw here — user can lift finger and continue on next touch
   checkWin();
-  // Reset usingTouch after a delay so synthetic mouse events are suppressed
-  setTimeout(()=>{usingTouch=false;},500);
 }
 function onBoardTouchCancel(e){
   gDraw=false; gAct=null;
-  setTimeout(()=>{usingTouch=false;},500);
+},500);
 }
 
 function startCell(el){
   const r=+el.dataset.r,c=+el.dataset.c,k=r+','+c;
   const dc=gDots[k],gc=gGr[k],col=dc||gc;
-  if(!col)return;
+  if(!col){gDraw=false;gAct=null;return;}
   const path=gPaths[col]||[];
   const head=path[0],tail=path[path.length-1];
   const isComplete=path.length>=2&&gDots[head]&&gDots[tail];
