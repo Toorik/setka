@@ -224,7 +224,7 @@ nav {
 <nav style="display:none">
   <button class="nb on" onclick="go(0)" id="nb0">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-    Редактор v6
+    Редактор
   </button>
   <button class="nb" onclick="go(2)" id="nb2">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5,3 19,12 5,21"/></svg>
@@ -452,15 +452,26 @@ function cellAt(x,y){
   return el.closest('.cell')||null;
 }
 
-function onBoardMouseDown(e){ if(!gOv){const c=cellAt(e.clientX,e.clientY);if(c)startCell(c);} }
-function onBoardMouseMove(e){ if(gDraw&&gAct&&!gOv){const c=cellAt(e.clientX,e.clientY);if(c)moveCell(c);} }
-function onBoardUp(){ gDraw=false; checkWin(); }
+let usingTouch=false;
+
+function onBoardMouseDown(e){
+  if(usingTouch)return; // ignore synthetic mouse from touch
+  if(!gOv){const c=cellAt(e.clientX,e.clientY);if(c)startCell(c);}
+}
+function onBoardMouseMove(e){
+  if(usingTouch)return;
+  if(gDraw&&gAct&&!gOv){const c=cellAt(e.clientX,e.clientY);if(c)moveCell(c);}
+}
+function onBoardUp(){
+  if(usingTouch)return;
+  gDraw=false; checkWin();
+}
 
 function onBoardTouchStart(e){
   e.preventDefault();
+  usingTouch=true;
   if(gOv)return;
-  // If a previous draw was interrupted, clean up
-  if(gDraw){ gDraw=false; gAct=null; }
+  if(gDraw){gDraw=false;gAct=null;}
   const t=e.changedTouches[0];
   const c=cellAt(t.clientX,t.clientY);
   if(c)startCell(c);
@@ -476,9 +487,12 @@ function onBoardTouchEnd(e){
   e.preventDefault();
   gDraw=false;
   checkWin();
+  // Reset usingTouch after a delay so synthetic mouse events are suppressed
+  setTimeout(()=>{usingTouch=false;},500);
 }
 function onBoardTouchCancel(e){
   gDraw=false; gAct=null;
+  setTimeout(()=>{usingTouch=false;},500);
 }
 
 function startCell(el){
