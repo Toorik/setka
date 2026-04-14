@@ -479,37 +479,57 @@ function startCell(el){
   rGm();
   updFill();
 }
+function cutPath(targetCol, intersectK) {
+  const path = gPaths[targetCol];
+  const idx = path.indexOf(intersectK);
+  if (idx === -1) return;
 
-function moveCell(el){
-  if(!gAct) return;
-  const r=+el.dataset.r, c=+el.dataset.c, k=r+','+c;
-  const path=gPaths[gAct], last=path[path.length-1];
-  
-  if(!last || !adj(last,k)) return;
-  
-  // Если возвращаемся назад по своему пути — "отменяем" шаг
-  if(path.length >= 2 && path[path.length-2] === k){
+  // Если попали в стартовую или конечную точку чужого цвета — стираем весь путь
+  if (gDots[intersectK]) {
+    clrPath(targetCol);
+  } else {
+    // Если пересекли линию посередине — обрезаем "хвост" после точки пересечения
+    // и саму точку пересечения тоже удаляем из того пути
+    const toRemove = path.splice(idx); 
+    toRemove.forEach(rk => {
+      if (gGr[rk] === targetCol && !gDots[rk]) delete gGr[rk];
+    });
+  }
+}
+function moveCell(el) {
+  if (!gAct) return;
+  const r = +el.dataset.r, c = +el.dataset.c, k = r + ',' + c;
+  const path = gPaths[gAct], last = path[path.length - 1];
+
+  if (!last || !adj(last, k)) return;
+
+  // 1. Отмена шага (движение назад)
+  if (path.length >= 2 && path[path.length - 2] === k) {
     const rem = path.pop();
-    if(!gDots[rem]) delete gGr[rem];
+    if (!gDots[rem]) delete gGr[rem];
     rGm(); updFill(); return;
   }
 
-  // Если наступили на свой же путь в другом месте — ничего не делаем (защита от петель)
-  if(path.includes(k)) return;
+  // 2. Если наступили на свой же путь (петля) — игнорируем
+  if (path.includes(k)) return;
 
-  // Если наступили на чужой путь — стираем его
-  if(gGr[k] && gGr[k] !== gAct){
-    if(gDots[k] && gDots[k] !== gAct) return; // Нельзя затирать чужие стартовые точки
-    clrPath(gGr[k]);
+  // 3. ПЕРЕСЕЧЕНИЕ: Если клетка занята другим цветом
+  if (gGr[k] && gGr[k] !== gAct) {
+    // Если это чужая точка-старт — пересекать нельзя
+    if (gDots[k] && gDots[k] !== gAct) return;
+    
+    // Вызываем обрезку чужого пути
+    cutPath(gGr[k], k);
   }
 
+  // 4. Добавляем клетку в текущий путь
   path.push(k);
   gGr[k] = gAct;
   rGm();
   updFill();
 
-  // Если дошли до второй точки того же цвета
-  if(gDots[k] === gAct && k !== path[0]){
+  // 5. Проверка завершения линии
+  if (gDots[k] === gAct && k !== path[0]) {
     gDraw = false;
     checkWin();
   }
