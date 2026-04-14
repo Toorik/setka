@@ -411,162 +411,138 @@ function buildGmB(){
     b.appendChild(el);
   }
 
-  // Remove old listeners by cloning
-  const nb=b.cloneNode(true);
-  b.parentNode.replaceChild(nb,b);
   const board=document.getElementById('gmb');
-
-  board.addEventListener('mousedown',  onMD);
-  board.addEventListener('mousemove',  onMM);
-  document.addEventListener('mouseup', onMU);
-  board.addEventListener('touchstart',  onTS, {passive:false});
-  board.addEventListener('touchmove',   onTM, {passive:false});
-  board.addEventListener('touchend',    onTE, {passive:false});
-  board.addEventListener('touchcancel', onTC, {passive:false});
+  // Используем pointer events для лучшей поддержки тач-интерфейсов
+  board.addEventListener('pointerdown', onPD);
+  board.addEventListener('pointermove', onPM);
+  window.addEventListener('pointerup', onPU);
+  
   rGm();
 }
 
 function cellAt(x,y){
   const el=document.elementFromPoint(x,y);
   if(!el) return null;
-  if(el.classList.contains('cell')) return el;
-  return el.closest('.cell')||null;
+  return el.closest('.cell');
 }
 
-// ── Mouse ──
-let suppressMouse=false;
-
-function onMD(e){
-  if(suppressMouse||gOv)return;
-  const c=cellAt(e.clientX,e.clientY);
-  if(c){gDraw=true;startCell(c);}
+function onPD(e){
+  if(gOv) return;
+  const c = cellAt(e.clientX, e.clientY);
+  if(c){
+    gDraw = true;
+    startCell(c);
+  }
 }
-function onMM(e){
-  if(suppressMouse||!gDraw||!gAct||gOv)return;
-  const c=cellAt(e.clientX,e.clientY);
+
+function onPM(e){
+  if(!gDraw || !gAct || gOv) return;
+  const c = cellAt(e.clientX, e.clientY);
   if(c) moveCell(c);
 }
-function onMU(){
-  if(suppressMouse)return;
-  gDraw=false;
+
+function onPU(){
+  gDraw = false;
+  // Мы НЕ обнуляем gAct, чтобы можно было продолжить
 }
 
-// ── Touch ──
-// Key fix: on touchend we set gDraw=false but keep gAct intact.
-// On next touchstart, startCell() re-enables gDraw from the correct cell.
-function onTS(e){
-  e.preventDefault();
-  suppressMouse=true;
-  if(gOv)return;
-  // End any ongoing draw first
-  gDraw=false;
-  const t=e.changedTouches[0];
-  const c=cellAt(t.clientX,t.clientY);
-  if(c){gDraw=true;startCell(c);}
-}
-function onTM(e){
-  e.preventDefault();
-  if(!gDraw||!gAct||gOv)return;
-  const t=e.changedTouches[0];
-  const c=cellAt(t.clientX,t.clientY);
-  if(c) moveCell(c);
-}
-function onTE(e){
-  e.preventDefault();
-  // Just stop drawing — do NOT clear gAct.
-  // Next touchstart will call startCell which correctly continues or resets.
-  gDraw=false;
-  setTimeout(()=>{suppressMouse=false;},500);
-}
-function onTC(e){
-  gDraw=false; gAct=null;
-  setTimeout(()=>{suppressMouse=false;},500);
-}
-
-// ── Core game logic ──
 function startCell(el){
-  const r=+el.dataset.r,c=+el.dataset.c,k=r+','+c;
-  const dc=gDots[k],gc=gGr[k],col=dc||gc;
-  if(!col){gDraw=false;return;}
+  const r=+el.dataset.r, c=+el.dataset.c, k=r+','+c;
+  const dotCol = gDots[k]; // Цвет точки, если это стартовая/конечная
+  const pathCol = gGr[k];  // Цвет пути в этой клетке
+  const col = dotCol || pathCol;
 
-  const path=gPaths[col]||[];
-  const head=path[0],tail=path[path.length-1];
-  const isComplete=path.length>=2&&gDots[head]&&gDots[tail];
-
-  if(isComplete){
-    if(k===tail){gAct=col;rGm();updFill();return;}
-    if(k===head){
-      const rem=path.splice(1);rem.forEach(rk=>{if(gGr[rk]===col)delete gGr[rk];});
-      gAct=col;rGm();updFill();return;
-    }
-    const idx=path.indexOf(k);
-    if(idx!==-1){
-      const rem=path.splice(idx+1);rem.forEach(rk=>{if(gGr[rk]===col)delete gGr[rk];});
-      gAct=col;rGm();updFill();
-    }
+  if(!col) {
+    gAct = null;
     return;
   }
 
-  if(path.length===0||(!path.includes(k))){
-    // fresh start or tapped outside own path
-    clrPath(col);gPaths[col]=[k];gGr[k]=col;gAct=col;rGm();updFill();return;
+  gAct = col;
+  const path = gPaths[col];
+  const idx = path.indexOf(k);
+
+  // Если нажали на существующий путь, обрезаем его до этой точки, чтобы продолжить рисовать
+  if(idx !== -1){
+    const toRemove = path.splice(idx + 1);
+    toRemove.forEach(rk => {
+      if(gGr[rk] === col && !gDots[rk]) delete gGr[rk];
+    });
+  } else {
+    // Если нажали на точку, у которой еще нет пути, или на чужой путь
+    if(dotCol){
+      clrPath(dotCol);
+      gPaths[dotCol] = [k];
+      gGr[k] = dotCol;
+    }
   }
-  if(k===tail){gAct=col;rGm();updFill();return;}
-  if(k===head){
-    const rem=path.splice(1);rem.forEach(rk=>{if(gGr[rk]===col)delete gGr[rk];});
-    gAct=col;rGm();updFill();return;
-  }
-  const idx=path.indexOf(k);
-  if(idx!==-1){
-    const rem=path.splice(idx+1);rem.forEach(rk=>{if(gGr[rk]===col)delete gGr[rk];});
-    gAct=col;rGm();updFill();
-  }
+  
+  rGm();
+  updFill();
 }
 
 function moveCell(el){
-  if(!gAct)return;
-  const r=+el.dataset.r,c=+el.dataset.c,k=r+','+c;
-  const path=gPaths[gAct],last=path[path.length-1];
-  if(!last||!adj(last,k))return;
-  // undo step
-  if(path.length>=2&&path[path.length-2]===k){
-    const rem=path.pop();
-    if(gDots[rem]!==gAct)delete gGr[rem];
-    rGm();updFill();return;
+  if(!gAct) return;
+  const r=+el.dataset.r, c=+el.dataset.c, k=r+','+c;
+  const path=gPaths[gAct], last=path[path.length-1];
+  
+  if(!last || !adj(last,k)) return;
+  
+  // Если возвращаемся назад по своему пути — "отменяем" шаг
+  if(path.length >= 2 && path[path.length-2] === k){
+    const rem = path.pop();
+    if(!gDots[rem]) delete gGr[rem];
+    rGm(); updFill(); return;
   }
-  // already own path — skip (prevent loops)
-  if(gGr[k]===gAct)return;
-  // clear other color
-  if(gGr[k]&&gGr[k]!==gAct){
-    if(gDots[k]&&gDots[k]!==gAct)return;
+
+  // Если наступили на свой же путь в другом месте — ничего не делаем (защита от петель)
+  if(path.includes(k)) return;
+
+  // Если наступили на чужой путь — стираем его
+  if(gGr[k] && gGr[k] !== gAct){
+    if(gDots[k] && gDots[k] !== gAct) return; // Нельзя затирать чужие стартовые точки
     clrPath(gGr[k]);
   }
-  path.push(k);gGr[k]=gAct;rGm();updFill();
-  // auto-complete when reaching the other dot
-  if(gDots[k]===gAct){gDraw=false;gAct=null;checkWin();}
+
+  path.push(k);
+  gGr[k] = gAct;
+  rGm();
+  updFill();
+
+  // Если дошли до второй точки того же цвета
+  if(gDots[k] === gAct && k !== path[0]){
+    gDraw = false;
+    checkWin();
+  }
 }
 
-function clrPath(col){(gPaths[col]||[]).forEach(k=>{if(gGr[k]===col)delete gGr[k];});gPaths[col]=[];}
-function adj(a,b){const[r1,c1]=a.split(',').map(Number),[r2,c2]=b.split(',').map(Number);return Math.abs(r1-r2)+Math.abs(c1-c2)===1;}
+function clrPath(col){
+  if(!gPaths[col]) return;
+  gPaths[col].forEach(k => { if(gGr[k] === col) delete gGr[k]; });
+  gPaths[col] = [];
+}
+
+function adj(a,b){
+  const [r1,c1]=a.split(',').map(Number);
+  const [r2,c2]=b.split(',').map(Number);
+  return Math.abs(r1-r2)+Math.abs(c1-c2) === 1;
+}
 
 function rGm(){
   document.querySelectorAll('#gmb .cell').forEach(cell=>{
-    const r=+cell.dataset.r,c=+cell.dataset.c,k=r+','+c;
-    const col=gGr[k],dot=gDots[k];
-    cell.innerHTML='';cell.style.background='';
+    const r=+cell.dataset.r, c=+cell.dataset.c, k=r+','+c;
+    const col=gGr[k], dot=gDots[k];
+    cell.innerHTML=''; cell.style.background='';
     if(col){
-      if(!dot)cell.style.background=CH[col]+'28';
+      if(!dot) cell.style.background=CH[col]+'28';
       const svg=mkPipe(r,c,col,CH[col]);
-      if(svg)cell.appendChild(svg);
+      if(svg) cell.appendChild(svg);
     }
     if(dot){
-      const d=document.createElement('div');d.className='dc';d.style.background=CH[dot];
+      const d=document.createElement('div'); d.className='dc'; d.style.background=CH[dot];
       const p=gPaths[dot]||[];
-      if(p.length>=2){
-        const dks=Object.entries(gDots).filter(([,v])=>v===dot).map(([k])=>k);
-        if(dks.length===2&&dks.includes(p[0])&&dks.includes(p[p.length-1])){
-          d.classList.add('glow');d.style.setProperty('--gc',CH[dot]+'99');
-        }
+      // Проверка на завершенность линии для свечения
+      if(p.length>=2 && gDots[p[0]]===dot && gDots[p[p.length-1]]===dot && p[0]!==p[p.length-1]){
+        d.classList.add('glow'); d.style.setProperty('--gc',CH[dot]+'99');
       }
       cell.appendChild(d);
     }
@@ -574,56 +550,57 @@ function rGm(){
 }
 
 function mkPipe(r,c,col,hex){
-  const k=r+','+c,path=gPaths[col]||[],idx=path.indexOf(k);
-  if(idx===-1)return null;
-  const prev=idx>0?path[idx-1]:null,next=idx<path.length-1?path[idx+1]:null;
+  const k=r+','+c, path=gPaths[col]||[], idx=path.indexOf(k);
+  if(idx===-1) return null;
+  const prev=idx>0?path[idx-1]:null, next=idx<path.length-1?path[idx+1]:null;
   const D=[];
-  [prev,next].forEach(nb=>{if(!nb)return;const[nr,nc]=nb.split(',').map(Number);
-    if(nr===r-1)D.push('U');if(nr===r+1)D.push('D');if(nc===c-1)D.push('L');if(nc===c+1)D.push('R');});
-  if(!D.length)return null;
-  const has=d=>D.includes(d),M=22,W=10;
+  [prev,next].forEach(nb=>{
+    if(!nb)return; const[nr,nc]=nb.split(',').map(Number);
+    if(nr===r-1)D.push('U'); if(nr===r+1)D.push('D');
+    if(nc===c-1)D.push('L'); if(nc===c+1)D.push('R');
+  });
+  if(!D.length) return null;
+  const has=d=>D.includes(d), M=22, W=10;
   let s='';
-  if(has('L')&&has('R'))s+=`<rect x="0" y="${M-W/2}" width="44" height="${W}" fill="${hex}"/>`;
-  else if(has('L'))s+=`<rect x="0" y="${M-W/2}" width="${M}" height="${W}" fill="${hex}"/>`;
-  else if(has('R'))s+=`<rect x="${M}" y="${M-W/2}" width="${M}" height="${W}" fill="${hex}"/>`;
-  if(has('U')&&has('D'))s+=`<rect x="${M-W/2}" y="0" width="${W}" height="44" fill="${hex}"/>`;
-  else if(has('U'))s+=`<rect x="${M-W/2}" y="0" width="${W}" height="${M}" fill="${hex}"/>`;
-  else if(has('D'))s+=`<rect x="${M-W/2}" y="${M}" width="${W}" height="${M}" fill="${hex}"/>`;
-  if((has('L')||has('R'))&&(has('U')||has('D')))s+=`<rect x="${M-W/2}" y="${M-W/2}" width="${W}" height="${W}" fill="${hex}"/>`;
+  if(has('L')&&has('R')) s+=`<rect x="0" y="${M-W/2}" width="44" height="${W}" fill="${hex}"/>`;
+  else if(has('L')) s+=`<rect x="0" y="${M-W/2}" width="${M}" height="${W}" fill="${hex}"/>`;
+  else if(has('R')) s+=`<rect x="${M}" y="${M-W/2}" width="${M}" height="${W}" fill="${hex}"/>`;
+  if(has('U')&&has('D')) s+=`<rect x="${M-W/2}" y="0" width="${W}" height="44" fill="${hex}"/>`;
+  else if(has('U')) s+=`<rect x="${M-W/2}" y="0" width="${W}" height="${M}" fill="${hex}"/>`;
+  else if(has('D')) s+=`<rect x="${M-W/2}" y="${M}" width="${W}" height="${M}" fill="${hex}"/>`;
+  if((has('L')||has('R'))&&(has('U')||has('D'))) s+=`<rect x="${M-W/2}" y="${M-W/2}" width="${W}" height="${W}" fill="${hex}"/>`;
   const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
-  svg.setAttribute('viewBox','0 0 44 44');svg.className='psv';svg.innerHTML=s;
+  svg.setAttribute('viewBox','0 0 44 44'); svg.className='psv'; svg.innerHTML=s;
   return svg;
 }
 
-function updFill(){if(!gLv)return;document.getElementById('hf').textContent=Math.round(Object.keys(gGr).length/(gLv.size*gLv.size)*100)+'%';}
+function updFill(){
+  if(!gLv)return;
+  const filled = Object.keys(gGr).length;
+  const total = gLv.size * gLv.size;
+  document.getElementById('hf').textContent=Math.round((filled/total)*100)+'%';
+}
 
 function checkWin(){
   if(!gLv)return;
-  if(Object.keys(gGr).length<gLv.size*gLv.size)return;
+  if(Object.keys(gGr).length < gLv.size*gLv.size) return;
   const cols=[...new Set(Object.values(gDots))];
   for(const c of cols){
-    const p=gPaths[c]||[];if(p.length<2)return;
-    const dks=Object.entries(gDots).filter(([,v])=>v===c).map(([k])=>k);
-    if(dks.length!==2||!dks.includes(p[0])||!dks.includes(p[p.length-1]))return;
+    const p=gPaths[c]||[];
+    if(p.length<2) return;
+    const heads = Object.entries(gDots).filter(([k,v])=>v===c).map(([k])=>k);
+    if(!heads.includes(p[0]) || !heads.includes(p[p.length-1])) return;
   }
-  stopClock();gOv=true;
-  const t=el;
-  let rm='';
-  if(gLv.id!=='__test__'){
-    const pv=sRecs[gLv.id];
-    if(!pv||t<pv){sRecs[gLv.id]=t;rm=pv?'🏆 Новый рекорд сессии!':'⏱ Первый результат!';}
-    else{rm='Рекорд сессии: '+pv.toFixed(1)+'s';}
-  }
-  document.getElementById('wtm').textContent=t.toFixed(1)+'s';
-  document.getElementById('wrec').textContent=rm;
+  stopClock(); gOv=true;
+  document.getElementById('wtm').textContent=el.toFixed(1)+'s';
   document.getElementById('wov').classList.remove('dn');
 }
 
-function resetGame(){closeWin();if(gLv)loadGame(gLv);}
-function closeWin(){document.getElementById('wov').classList.add('dn');}
+function resetGame(){ closeWin(); if(gLv) loadGame(gLv); }
+function closeWin(){ document.getElementById('wov').classList.add('dn'); }
 
 function startClock(){
-  stopClock();tSt=performance.now()-el*1000;
+  stopClock(); tSt=performance.now()-el*1000;
   clkInt=setInterval(()=>{
     el=(performance.now()-tSt)/1000;
     const ht=document.getElementById('ht');
@@ -631,9 +608,9 @@ function startClock(){
     ht.className='hv clk'+(el>60?' dang':el>30?' warn':'');
   },100);
 }
-function stopClock(){if(clkInt){clearInterval(clkInt);clkInt=null;}}
+function stopClock(){ if(clkInt){clearInterval(clkInt);clkInt=null;} }
 
-buildSz();buildPal();buildEdB();
+buildSz(); buildPal(); buildEdB();
 </script>
 </body>
 </html>
