@@ -262,6 +262,8 @@ nav {
       <div class="hs"><div class="hl">Уровень</div><div class="hv" id="hn" style="font-size:11px;font-family:'JetBrains Mono',monospace;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">—</div></div>
       <div class="hs"><div class="hl">Время</div><div class="hv clk" id="ht">0.0</div></div>
       <div class="hs"><div class="hl">Заполнено</div><div class="hv" id="hf" style="font-size:14px">0%</div></div>
+      <button class="rstb" onclick="showHint()" style="color:var(--yellow);border-color:var(--yellow);font-size:16px">💡</button>
+      
       <button class="rstb" onclick="resetGame()">↺</button>
       <button class="rstb" onclick="closeGame()" style="color:var(--accent2);border-color:var(--accent2)">✕</button>
     </div>
@@ -296,7 +298,7 @@ const CH={}; COLS.forEach(c=>CH[c.id]=c.h);
 
 let cur=0;
 function go(idx){}
-
+let currentSolution = null; // Здесь будет лежать путь-подсказка
 // ═══════════════ EDITOR ═══════════════
 let edSz=7, edG={}, selC='red', erasing=false, edDrag=false;
 
@@ -506,7 +508,6 @@ function generateRandomLevel() {
     const colors = [...COLS].sort(() => Math.random() - 0.5);
     let colorIdx = 0;
 
-    // 1. Сначала генерируем ПОЛНЫЕ пути
     for (let r = 0; r < size; r++) {
         for (let c = 0; c < size; c++) {
             if (grid[r][c] === null) {
@@ -543,23 +544,20 @@ function generateRandomLevel() {
         }
     }
 
-    // 2. Теперь сохраняем это как "Правильное решение"
     edG = {};
-    currentSolution = {}; // Наш "тайный блокнот"
+    currentSolution = {}; // Очищаем старое решение
     
     paths.forEach(p => {
         const start = p.path[0];
         const end = p.path[p.path.length - 1];
-        
-        // Ставим точки для игрока
         edG[`${start[0]},${start[1]}`] = p.color;
         edG[`${end[0]},${end[1]}`] = p.color;
         
-        // Запоминаем весь путь для подсказки
+        // СОХРАНЯЕМ ПРАВИЛЬНЫЙ ПУТЬ
         currentSolution[p.color] = p.path.map(coord => coord.join(','));
     });
 
-    rEdB(); // Обновляем экран
+    rEdB();
 }
   
 function moveCell(el) {
