@@ -690,7 +690,46 @@ function checkWin(){
   document.getElementById('wtm').textContent=el.toFixed(1)+'s';
   document.getElementById('wov').classList.remove('dn');
 }
+function showHint() {
+    // Если решения нет (уровень нарисован вручную) или игра окончена - ничего не делаем
+    if (!currentSolution || gOv) return;
 
+    // Ищем цвета, которые еще не соединены правильно игроком
+    const remainingColors = Object.keys(currentSolution).filter(col => {
+        const p = gPaths[col] || [];
+        const isFinished = p.length >= 2 && 
+                           gDots[p[0]] === col && 
+                           gDots[p[p.length-1]] === col && 
+                           p[0] !== p[p.length-1];
+        return !isFinished;
+    });
+
+    if (remainingColors.length === 0) return;
+
+    // Берем первый попавшийся нерешенный цвет
+    const colToHint = remainingColors[0];
+    const solutionPath = currentSolution[colToHint];
+
+    // 1. Очищаем текущий путь этого цвета, если игрок начал его рисовать неверно
+    clrPath(colToHint);
+
+    // 2. Рисуем правильный путь из нашего "блокнота"
+    gPaths[colToHint] = [...solutionPath];
+    solutionPath.forEach(k => {
+        // Если на пути этого цвета лежат куски других линий игрока - стираем их (как при обычном пересечении)
+        if (gGr[k] && gGr[k] !== colToHint && !gDots[k]) {
+            const otherCol = gGr[k];
+            if (gPaths[otherCol]) {
+                gPaths[otherCol] = gPaths[otherCol].filter(pk => pk !== k);
+            }
+        }
+        gGr[k] = colToHint;
+    });
+
+    rGm();
+    updFill();
+    checkWin();
+}
 function resetGame(){ closeWin(); if(gLv) loadGame(gLv); }
 function closeWin(){ document.getElementById('wov').classList.add('dn'); }
 
