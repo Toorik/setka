@@ -503,36 +503,35 @@ function cutPath(targetCol, intersectK) {
 }
 function generateRandomLevel() {
     const size = edSz;
-    const totalCells = size * size;
     let grid = Array(size).fill(null).map(() => Array(size).fill(null));
     let paths = [];
 
-    // 1. Выбираем количество цветов (от 3 до максимума в зависимости от размера)
-    const numColors = Math.min(COLS.length, Math.floor(size * 1.5));
-    
-    // 2. Расставляем случайные стартовые точки
+    // 1. Расставляем случайные стартовые точки (головы)
+    const numColors = Math.min(COLS.length, Math.floor(size * 1.8));
     for (let i = 0; i < numColors; i++) {
         let r, c;
+        let attempts = 0;
         do {
             r = Math.floor(Math.random() * size);
             c = Math.floor(Math.random() * size);
-        } while (grid[r][c] !== null);
+            attempts++;
+        } while (grid[r][c] !== null && attempts < 100);
         
-        const col = COLS[i].id;
-        grid[r][c] = col;
-        paths.push({ color: col, path: [[r, c]], closed: false });
+        if (grid[r][c] === null) {
+            const col = COLS[i].id;
+            grid[r][c] = col;
+            paths.push({ color: col, path: [[r, c]], active: true });
+        }
     }
 
-    // 3. Итеративно растим все пути одновременно
-    let stuckCount = 0;
-    while (stuckCount < 200) { // Лимит попыток роста
-        let movedAny = false;
-        
-        // Перемешиваем пути, чтобы каждый раз рос разный цвет
-        paths.sort(() => Math.random() - 0.5);
+    // 2. Растим пути строго по одному шагу в конец (никаких вставок в середину!)
+    let growing = true;
+    while (growing) {
+        growing = false;
+        paths.sort(() => Math.random() - 0.5); // Рандомный порядок роста
 
         for (let pObj of paths) {
-            if (pObj.closed) continue;
+            if (!pObj.active) continue;
 
             const curr = pObj.path[pObj.path.length - 1];
             const dirs = [[0,1],[0,-1],[1,0],[-1,0]].sort(() => Math.random() - 0.5);
@@ -542,19 +541,48 @@ function generateRandomLevel() {
                 const nr = curr[0] + dr, nc = curr[1] + dc;
                 
                 if (nr >= 0 && nr < size && nc >= 0 && nc < size && grid[nr][nc] === null) {
-                    // Проверка на "самопересечение" и создание тупиков:
-                    // Не даем линии окружать пустые клетки, у которых нет соседей
-                    grid[nr][nc] = pObj.color;
-                    pObj.path.push([nr, nc]);
-                    moved = true;
-                    movedAny = true;
-                    break;
+                    // Проверка: чтобы линия не слипалась сама с собой "боками"
+                    // (это делает уровни красивыми и решаемыми)
+                    let selfNeighbors = 0;
+                    for (const [ddr, ddc] of [[0,1],[0,-1],[1,0],[-1,0]]) {
+                        const nnr = nr + ddr, nnc = nc + ddc;
+                        if (pObj.path.some(p => p[0] === nnr && p[1] === nnc)) selfNeighbors++;
+                    }
+
+                    if (selfNeighbors <= 1) { 
+                        grid[nr][nc] = pObj.color;
+                        pObj.path.push([nr, nc]);
+                        moved = true;
+                        growing = true;
+                        break;
+                    }
                 }
             }
-            if (!moved) pObj.closed = true; 
+            if (!moved) pObj.active = false;
         }
-        if (!movedAny) stuckCount++;
     }
+
+    // 3. ФИНАЛЬНЫЙ ШТРИХ: Если остались дыры, мы НЕ вставляем их в пути, 
+    // а просто оставляем пустыми. Flow Free это допускает. 
+    // Но если хочешь 100%, удали короткие пути (меньше 2 клеток).
+
+    edG = {};
+    currentSolution = {};
+    paths.forEach(p => {
+        if (p.path.length < 2) {
+            // Очищаем одинокие точки с сетки
+            p.path.forEach(([r,c]) => { if(grid[r][c] === p.color) grid[r][c] = null; });
+            return;
+        }
+        const start = p.path[0];
+        const end = p.path[p.path.length - 1];
+        edG[start.join(',')] = p.color;
+        edG[end.join(',')] = p.color;
+        currentSolution[p.color] = p.path.map(c => c.join(','));
+    });
+
+    rEdB();
+}
 
     // 4. ФИКС ПУСТОТ: Если остались пустые клетки, отдаем их соседним путям
     for (let r = 0; r < size; r++) {
