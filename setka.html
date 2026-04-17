@@ -541,7 +541,7 @@ function generateRandomLevel() {
         }
     }
 
-    // 2. ФИКС ДЫР: "Заталкиваем" пустые клетки в ближайшие пути
+// 2. ФИКС ДЫР (Безопасное расширение путей)
     let changed = true;
     while (changed) {
         changed = false;
@@ -555,12 +555,14 @@ function generateRandomLevel() {
                             const col = grid[nr][nc];
                             const pObj = paths.find(p => p.color === col);
                             if (pObj) {
-                                // Вставляем пустую клетку в начало или конец пути
-                                if (pObj.path[0][0] === nr && pObj.path[0][1] === nc) {
-                                    pObj.path.unshift([r, c]);
-                                } else {
-                                    pObj.path.push([r, c]);
-                                }
+                                const p = pObj.path;
+                                // Ищем, где в пути находится соседняя клетка
+                                const idx = p.findIndex(coord => coord[0] === nr && coord[1] === nc);
+                                
+                                // Вставляем новую клетку СРАЗУ ПОСЛЕ соседа в массиве пути.
+                                // Это гарантирует, что первая и последняя точки пути останутся на месте.
+                                p.splice(idx + 1, 0, [r, c]);
+                                
                                 grid[r][c] = col;
                                 changed = true;
                                 break;
