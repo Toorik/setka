@@ -715,17 +715,23 @@ function updFill(){
 }
 
 function checkWin(){
-  if(!gLv)return;
-  if(Object.keys(gGr).length < gLv.size*gLv.size) return;
-  const cols=[...new Set(Object.values(gDots))];
+  if(!gLv) return;
+  // 1. Поле должно быть заполнено полностью
+  if(Object.keys(gGr).length < gLv.size * gLv.size) return;
+
+  const cols = [...new Set(Object.values(gDots))];
   for(const c of cols){
-    const p=gPaths[c]||[];
-    if(p.length<2) return;
-    const heads = Object.entries(gDots).filter(([k,v])=>v===c).map(([k])=>k);
-    if(!heads.includes(p[0]) || !heads.includes(p[p.length-1])) return;
+    const p = gPaths[c] || [];
+    if(p.length < 2) return;
+    
+    // ПРОВЕРКА: Первый и последний элементы пути игрока ДОЛЖНЫ быть точками этого цвета
+    const startK = p[0];
+    const endK = p[p.length - 1];
+    if(gDots[startK] !== c || gDots[endK] !== c || startK === endK) return;
   }
-  stopClock(); gOv=true;
-  document.getElementById('wtm').textContent=el.toFixed(1)+'s';
+  
+  stopClock(); gOv = true;
+  document.getElementById('wtm').textContent = el.toFixed(1) + 's';
   document.getElementById('wov').classList.remove('dn');
 }
 function showHint() {
