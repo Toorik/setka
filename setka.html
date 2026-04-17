@@ -503,87 +503,61 @@ function cutPath(targetCol, intersectK) {
 }
 function generateRandomLevel() {
     const size = edSz;
-    const grid = Array(size).fill(null).map(() => Array(size).fill(null));
-    const paths = [];
-    const colors = [...COLS].sort(() => Math.random() - 0.5);
-    let colorIdx = 0;
-
-    // 1. Создаем начальные пути (как было)
-    for (let r = 0; r < size; r++) {
-        for (let c = 0; c < size; c++) {
-            if (grid[r][c] === null) {
-                const color = colors[colorIdx++]?.id;
-                if (!color) break;
-                let currR = r, currC = c;
-                grid[currR][currC] = color;
-                const currentPath = [[currR, currC]];
-                for (let len = 0; len < size * 3; len++) {
-                    const dirs = [[0,1],[0,-1],[1,0],[-1,0]].sort(() => Math.random() - 0.5);
-                    let moved = false;
-                    for (const [dr, dc] of dirs) {
-                        const nr = currR + dr, nc = currC + dc;
-                        if (nr >= 0 && nr < size && nc >= 0 && nc < size && grid[nr][nc] === null) {
-                            grid[nr][nc] = color;
-                            currR = nr; currC = nc;
-                            currentPath.push([currR, currC]);
-                            moved = true; break;
-                        }
-                    }
-                    if (!moved) break;
-                }
-                if (currentPath.length < 2) {
-                    currentPath.forEach(([pr, pc]) => grid[pr][pc] = null);
-                    colorIdx--;
-                } else {
-                    paths.push({ color, path: currentPath });
-                }
-            }
+    const totalCells = size * size;
+    const grid = [];
+    for(let r=0; r<size; r++) for(let c=0; c<size; c++) grid.push([r,c]);
+    
+    // 1. Перемешиваем все клетки
+    grid.sort(() => Math.random() - 0.5);
+    
+    // 2. Строим один связный путь через все клетки (Гамильтонов путь — это сложно, 
+    // поэтому используем упрощенный змеевидный обход с рандомизацией)
+    let fullPath = [];
+    let visited = new Set();
+    let curr = [0, 0];
+    
+    while (visited.size < totalCells) {
+        fullPath.push(curr);
+        visited.add(curr.join(','));
+        
+        let neighbors = [[0,1],[0,-1],[1,0],[-1,0]]
+            .map(([dr, dc]) => [curr[0]+dr, curr[1]+dc])
+            .filter(([nr, nc]) => 
+                nr >= 0 && nr < size && nc >= 0 && nc < size && !visited.has(nr + ',' + nc)
+            )
+            .sort(() => Math.random() - 0.5);
+            
+        if (neighbors.length > 0) {
+            curr = neighbors[0];
+        } else {
+            // Если зашли в тупик, ищем ближайшую непосещенную клетку и прыгаем туда
+            // (Для простых уровней это создаст разрыв, который станет новой парой точек)
+            let next = grid.find(g => !visited.has(g.join(',')));
+            if (next) curr = next; else break;
         }
     }
 
-// 2. ФИКС ДЫР (Безопасное расширение путей)
-    let changed = true;
-    while (changed) {
-        changed = false;
-        for (let r = 0; r < size; r++) {
-            for (let c = 0; c < size; c++) {
-                if (grid[r][c] === null) {
-                    const dirs = [[0,1],[0,-1],[1,0],[-1,0]].sort(() => Math.random() - 0.5);
-                    for (const [dr, dc] of dirs) {
-                        const nr = r + dr, nc = c + dc;
-                        if (nr >= 0 && nr < size && nc >= 0 && nc < size && grid[nr][nc] !== null) {
-                            const col = grid[nr][nc];
-                            const pObj = paths.find(p => p.color === col);
-                            if (pObj) {
-                                const p = pObj.path;
-                                // Ищем, где в пути находится соседняя клетка
-                                const idx = p.findIndex(coord => coord[0] === nr && coord[1] === nc);
-                                
-                                // Вставляем новую клетку СРАЗУ ПОСЛЕ соседа в массиве пути.
-                                // Это гарантирует, что первая и последняя точки пути останутся на месте.
-                                p.splice(idx + 1, 0, [r, c]);
-                                
-                                grid[r][c] = col;
-                                changed = true;
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    // 3. Сохраняем результат
+    // 3. Режем длинный путь на куски (цвета)
     edG = {};
     currentSolution = {};
-    paths.forEach(p => {
-        const start = p.path[0];
-        const end = p.path[p.path.length - 1];
-        edG[`${start[0]},${start[1]}`] = p.color;
-        edG[`${end[0]},${end[1]}`] = p.color;
-        currentSolution[p.color] = p.path.map(coord => coord.join(','));
-    });
+    let tempPath = [...fullPath];
+    let colIdx = 0;
+
+    while (tempPath.length > 0 && colIdx < COLS.length) {
+        // Длина одного пути от 2 до 10 клеток
+        let pLen = Math.floor(Math.random() * 8) + 2; 
+        let segment = tempPath.splice(0, pLen);
+        if (segment.length < 2) continue;
+
+        let color = COLS[colIdx].id;
+        let s = segment[0], e = segment[segment.length-1];
+        
+        edG[s.join(',')] = color;
+        edG[e.join(',')] = color;
+        currentSolution[color] = segment.map(c => c.join(','));
+        colIdx++;
+    }
+
     rEdB();
 }
   
