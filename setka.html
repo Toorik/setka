@@ -503,55 +503,82 @@ function cutPath(targetCol, intersectK) {
 }
 function generateRandomLevel() {
     const size = edSz;
+    const totalCells = size * size;
     let grid = Array(size).fill(null).map(() => Array(size).fill(null));
+    let paths = [];
+
+    // 1. Инициализируем стартовые точки (Seeds)
+    // Оптимальное количество цветов для сложности: size + 1
+    const numColors = Math.min(COLS.length, size + 1);
     
-    // 1. Создаем базовую змейку (Гамильтонов путь), заполняющую всё поле
-    let fullPath = [];
-    for (let r = 0; r < size; r++) {
-        if (r % 2 === 0) {
-            for (let c = 0; c < size; c++) fullPath.push([r, c]);
-        } else {
-            for (let c = size - 1; c >= 0; c--) fullPath.push([r, c]);
+    for (let i = 0; i < numColors; i++) {
+        let r, c;
+        do {
+            r = Math.floor(Math.random() * size);
+            c = Math.floor(Math.random() * size);
+        } while (grid[r][c] !== null);
+        
+        const col = COLS[i].id;
+        grid[r][c] = col;
+        paths.push({ color: col, path: [[r, c]], done: false });
+    }
+
+    // 2. Основной цикл роста (Flood-Fill Expansion)
+    let hasMoved = true;
+    while (hasMoved) {
+        hasMoved = false;
+        // Перемешиваем пути для честной конкуренции за клетки
+        paths.sort(() => Math.random() - 0.5);
+
+        for (let p of paths) {
+            if (p.done) continue;
+
+            const curr = p.path[p.path.length - 1];
+            const neighbors = [[0,1],[0,-1],[1,0],[-1,0]]
+                .map(([dr, dc]) => [curr[0] + dr, curr[1] + dc])
+                .filter(([nr, nc]) => {
+                    if (nr < 0 || nr >= size || nc < 0 || nc >= size || grid[nr][nc] !== null) return false;
+                    
+                    // ГЛАВНЫЙ СЕКРЕТ: Проверка на "соседство"
+                    // Линия не может встать рядом с собой (чтобы не было жирных пятен)
+                    let touches = 0;
+                    [[0,1],[0,-1],[1,0],[-1,0]].forEach(([ddr, ddc]) => {
+                        const tr = nr + ddr, tc = nc + ddc;
+                        if (tr >= 0 && tr < size && tc >= 0 && tc < size && grid[tr][tc] === p.color) touches++;
+                    });
+                    return touches === 1; // Только одна связь — с предыдущей клеткой
+                })
+                .sort(() => Math.random() - 0.5);
+
+            if (neighbors.length > 0) {
+                const [nextR, nextC] = neighbors[0];
+                grid[nextR][nextC] = p.color;
+                p.path.push([nextR, nextC]);
+                hasMoved = true;
+            } else {
+                p.done = true;
+            }
         }
     }
 
-    // 2. "Мутация" — перемешиваем ряды и колонки, чтобы скрыть змейку
-    // Но так, чтобы не разорвать связность
-    if (Math.random() > 0.5) {
-        // Транспонируем (меняем R и C местами)
-        fullPath = fullPath.map(([r, c]) => [c, r]);
-    }
+    // 3. ПРОВЕРКА: Если остались пустые клетки — запускаем заново (Recursion)
+    const emptyCount = grid.flat().filter(v => v === null).length;
+    if (emptyCount > 0) return generateRandomLevel(); 
 
-    // 3. Разрезаем на случайные куски (цвета)
+    // 4. Финализация данных для игры и подсказок
     edG = {};
     currentSolution = {};
-    let tempPath = [...fullPath];
-    let colIdx = 0;
+    paths.forEach(p => {
+        const s = p.path[0];
+        const e = p.path[p.path.length - 1];
+        // Точки старта и финиша
+        edG[s.join(',')] = p.color;
+        edG[e.join(',')] = p.color;
+        // Чистый путь для подсказки (без разрывов!)
+        currentSolution[p.color] = p.path.map(coord => coord.join(','));
+    });
 
-    // Пока есть клетки и есть свободные цвета
-    while (tempPath.length > 0 && colIdx < COLS.length) {
-        // Минимальная длина 2, максимальная зависит от остатка
-        let maxLen = Math.min(tempPath.length, size + 2);
-        let pLen = Math.floor(Math.random() * (maxLen - 2 + 1)) + 2;
-        
-        // Если осталось мало клеток — забираем всё
-        if (tempPath.length - pLen < 2) pLen = tempPath.length;
-
-        let segment = tempPath.splice(0, pLen);
-        let color = COLS[colIdx].id;
-
-        // Фиксируем точки в редакторе
-        let start = segment[0];
-        let end = segment[segment.length - 1];
-        edG[start.join(',')] = color;
-        edG[end.join(',')] = color;
-
-        // Сохраняем правильный путь для подсказки
-        currentSolution[color] = segment.map(c => c.join(','));
-        colIdx++;
-    }
-
-    rEdB(); // Рендерим поле
+    rEdB(); // Отрисовываем результат
 }
 function moveCell(el) {
   if (!gAct) return;
