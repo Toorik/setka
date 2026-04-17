@@ -508,16 +508,15 @@ function generateRandomLevel() {
     const colors = [...COLS].sort(() => Math.random() - 0.5);
     let colorIdx = 0;
 
+    // 1. Создаем начальные пути (как было)
     for (let r = 0; r < size; r++) {
         for (let c = 0; c < size; c++) {
             if (grid[r][c] === null) {
                 const color = colors[colorIdx++]?.id;
-                if (!color) break; 
-
+                if (!color) break;
                 let currR = r, currC = c;
                 grid[currR][currC] = color;
                 const currentPath = [[currR, currC]];
-
                 for (let len = 0; len < size * 3; len++) {
                     const dirs = [[0,1],[0,-1],[1,0],[-1,0]].sort(() => Math.random() - 0.5);
                     let moved = false;
@@ -527,13 +526,11 @@ function generateRandomLevel() {
                             grid[nr][nc] = color;
                             currR = nr; currC = nc;
                             currentPath.push([currR, currC]);
-                            moved = true;
-                            break;
+                            moved = true; break;
                         }
                     }
                     if (!moved) break;
                 }
-                
                 if (currentPath.length < 2) {
                     currentPath.forEach(([pr, pc]) => grid[pr][pc] = null);
                     colorIdx--;
@@ -544,19 +541,47 @@ function generateRandomLevel() {
         }
     }
 
+    // 2. ФИКС ДЫР: "Заталкиваем" пустые клетки в ближайшие пути
+    let changed = true;
+    while (changed) {
+        changed = false;
+        for (let r = 0; r < size; r++) {
+            for (let c = 0; c < size; c++) {
+                if (grid[r][c] === null) {
+                    const dirs = [[0,1],[0,-1],[1,0],[-1,0]].sort(() => Math.random() - 0.5);
+                    for (const [dr, dc] of dirs) {
+                        const nr = r + dr, nc = c + dc;
+                        if (nr >= 0 && nr < size && nc >= 0 && nc < size && grid[nr][nc] !== null) {
+                            const col = grid[nr][nc];
+                            const pObj = paths.find(p => p.color === col);
+                            if (pObj) {
+                                // Вставляем пустую клетку в начало или конец пути
+                                if (pObj.path[0][0] === nr && pObj.path[0][1] === nc) {
+                                    pObj.path.unshift([r, c]);
+                                } else {
+                                    pObj.path.push([r, c]);
+                                }
+                                grid[r][c] = col;
+                                changed = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 3. Сохраняем результат
     edG = {};
-    currentSolution = {}; // Очищаем старое решение
-    
+    currentSolution = {};
     paths.forEach(p => {
         const start = p.path[0];
         const end = p.path[p.path.length - 1];
         edG[`${start[0]},${start[1]}`] = p.color;
         edG[`${end[0]},${end[1]}`] = p.color;
-        
-        // СОХРАНЯЕМ ПРАВИЛЬНЫЙ ПУТЬ
         currentSolution[p.color] = p.path.map(coord => coord.join(','));
     });
-
     rEdB();
 }
   
@@ -644,29 +669,40 @@ function rGm(){
   });
 }
 
-function mkPipe(r,c,col,hex){
-  const k=r+','+c, path=gPaths[col]||[], idx=path.indexOf(k);
-  if(idx===-1) return null;
-  const prev=idx>0?path[idx-1]:null, next=idx<path.length-1?path[idx+1]:null;
-  const D=[];
-  [prev,next].forEach(nb=>{
-    if(!nb)return; const[nr,nc]=nb.split(',').map(Number);
-    if(nr===r-1)D.push('U'); if(nr===r+1)D.push('D');
-    if(nc===c-1)D.push('L'); if(nc===c+1)D.push('R');
-  });
-  if(!D.length) return null;
-  const has=d=>D.includes(d), M=22, W=10;
-  let s='';
-  if(has('L')&&has('R')) s+=`<rect x="0" y="${M-W/2}" width="44" height="${W}" fill="${hex}"/>`;
-  else if(has('L')) s+=`<rect x="0" y="${M-W/2}" width="${M}" height="${W}" fill="${hex}"/>`;
-  else if(has('R')) s+=`<rect x="${M}" y="${M-W/2}" width="${M}" height="${W}" fill="${hex}"/>`;
-  if(has('U')&&has('D')) s+=`<rect x="${M-W/2}" y="0" width="${W}" height="44" fill="${hex}"/>`;
-  else if(has('U')) s+=`<rect x="${M-W/2}" y="0" width="${W}" height="${M}" fill="${hex}"/>`;
-  else if(has('D')) s+=`<rect x="${M-W/2}" y="${M}" width="${W}" height="${M}" fill="${hex}"/>`;
-  if((has('L')||has('R'))&&(has('U')||has('D'))) s+=`<rect x="${M-W/2}" y="${M-W/2}" width="${W}" height="${W}" fill="${hex}"/>`;
-  const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
-  svg.setAttribute('viewBox','0 0 44 44'); svg.className='psv'; svg.innerHTML=s;
-  return svg;
+function mkPipe(r, c, col, hex) {
+    const k = r + ',' + c, path = gPaths[col] || [], idx = path.indexOf(k);
+    if (idx === -1) return null;
+
+    const prev = idx > 0 ? path[idx - 1] : null;
+    const next = idx < path.length - 1 ? path[idx + 1] : null;
+    
+    // Если это точка старта/финиша и у нее ЕЩЕ НЕТ продолжения в пути игрока
+    if (!prev && !next) return null; 
+
+    const D = [];
+    [prev, next].forEach(nb => {
+        if (!nb) return;
+        const [nr, nc] = nb.split(',').map(Number);
+        if (nr === r - 1) D.push('U');
+        if (nr === r + 1) D.push('D');
+        if (nc === c - 1) D.push('L');
+        if (nc === c + 1) D.push('R');
+    });
+
+    const has = d => D.includes(d), M = 22, W = 10;
+    let s = '';
+    // Рисуем прямоугольники
+    if (has('L')) s += `<rect x="0" y="${M - W / 2}" width="${M}" height="${W}" fill="${hex}"/>`;
+    if (has('R')) s += `<rect x="${M}" y="${M - W / 2}" width="${M}" height="${W}" fill="${hex}"/>`;
+    if (has('U')) s += `<rect x="${M - W / 2}" y="0" width="${W}" height="${M}" fill="${hex}"/>`;
+    if (has('D')) s += `<rect x="${M - W / 2}" y="${M}" width="${W}" height="${M}" fill="${hex}"/>`;
+    
+    // Центральный квадрат для углов
+    if (D.length > 0) s += `<rect x="${M - W / 2}" y="${M - W / 2}" width="${W}" height="${W}" fill="${hex}"/>`;
+
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 44 44'); svg.className = 'psv'; svg.innerHTML = s;
+    return svg;
 }
 
 function updFill(){
