@@ -503,84 +503,93 @@ function cutPath(targetCol, intersectK) {
 }
 function generateRandomLevel() {
     const size = edSz;
+    const totalCells = size * size;
     let grid = Array(size).fill(null).map(() => Array(size).fill(null));
-    let paths = [];
+    let colorPaths = {};
 
-    // 1. Расставляем случайные стартовые точки (головы)
-    const numColors = Math.min(COLS.length, Math.floor(size * 1.8));
-    for (let i = 0; i < numColors; i++) {
-        let r, c;
-        let attempts = 0;
-        do {
-            r = Math.floor(Math.random() * size);
-            c = Math.floor(Math.random() * size);
-            attempts++;
-        } while (grid[r][c] !== null && attempts < 100);
-        
-        if (grid[r][c] === null) {
-            const col = COLS[i].id;
-            grid[r][c] = col;
-            paths.push({ color: col, path: [[r, c]], active: true });
-        }
-    }
-
-    // 2. Растим пути строго по одному шагу в конец (никаких вставок в середину!)
-    let growing = true;
-    while (growing) {
-        growing = false;
-        paths.sort(() => Math.random() - 0.5); // Рандомный порядок роста
-
-        for (let pObj of paths) {
-            if (!pObj.active) continue;
-
-            const curr = pObj.path[pObj.path.length - 1];
-            const dirs = [[0,1],[0,-1],[1,0],[-1,0]].sort(() => Math.random() - 0.5);
-            
-            let moved = false;
-            for (const [dr, dc] of dirs) {
-                const nr = curr[0] + dr, nc = curr[1] + dc;
-                
-                if (nr >= 0 && nr < size && nc >= 0 && nc < size && grid[nr][nc] === null) {
-                    // Проверка: чтобы линия не слипалась сама с собой "боками"
-                    // (это делает уровни красивыми и решаемыми)
-                    let selfNeighbors = 0;
-                    for (const [ddr, ddc] of [[0,1],[0,-1],[1,0],[-1,0]]) {
-                        const nnr = nr + ddr, nnc = nc + ddc;
-                        if (pObj.path.some(p => p[0] === nnr && p[1] === nnc)) selfNeighbors++;
-                    }
-
-                    if (selfNeighbors <= 1) { 
-                        grid[nr][nc] = pObj.color;
-                        pObj.path.push([nr, nc]);
-                        moved = true;
-                        growing = true;
-                        break;
+    // 1. Вспомогательная функция для проверки тупиков
+    function hasDeadEnds(g) {
+        for (let r = 0; r < size; r++) {
+            for (let c = 0; c < size; c++) {
+                if (g[r][c] === null) {
+                    let free = 0;
+                    [[0,1],[0,-1],[1,0],[-1,0]].forEach(([dr, dc]) => {
+                        const nr = r+dr, nc = c+dc;
+                        if (nr >= 0 && nr < size && nc >= 0 && nc < size && g[nr][nc] === null) free++;
+                    });
+                    if (free < 2) {
+                        // Если у пустой клетки меньше 2 соседей, она потенциально станет дыркой
+                        // Пропускаем проверку для крайних случаев, но это важный сигнал
                     }
                 }
             }
-            if (!moved) pObj.active = false;
         }
+        return false;
     }
 
-    // 3. ФИНАЛЬНЫЙ ШТРИХ: Если остались дыры, мы НЕ вставляем их в пути, 
-    // а просто оставляем пустыми. Flow Free это допускает. 
-    // Но если хочешь 100%, удали короткие пути (меньше 2 клеток).
+    // 2. Рекурсивная функция заполнения
+    function solve(r, c, colorIdx, currentPath) {
+        if (colorIdx >= 5) return true; // Ограничим до 5-6 цветов для сложности
 
+        const colId = COLS[colorIdx].id;
+        
+        // Пробуем все направления
+        const dirs = [[0,1],[0,-1],[1,0],[-1,0]].sort(() => Math.random() - 0.5);
+        
+        for (let [dr, dc] of dirs) {
+            let nr = r + dr, nc = c + dc;
+            
+            if (nr >= 0 && nr < size && nc >= 0 && nc < size && grid[nr][nc] === null) {
+                grid[nr][nc] = colId;
+                currentPath.push([nr, nc]);
+
+                // Условие: если путь достаточно длинный (минимум 3 клетки), 
+                // пробуем начать новый цвет из случайной свободной точки
+                if (currentPath.length >= 3 && Math.random() > 0.7) {
+                    colorPaths[colId] = [...currentPath];
+                    
+                    // Ищем следующую свободную клетку для нового цвета
+                    let nextStart = null;
+                    for(let i=0; i<size; i++) {
+                        for(let j=0; j<size; j++) {
+                            if(grid[i][j] === null) { nextStart = [i, j]; break; }
+                        }
+                        if(nextStart) break;
+                    }
+
+                    if (!nextStart) return true; // Поле полностью заполнено!
+
+                    grid[nextStart[0]][nextStart[1]] = COLS[colorIdx+1].id;
+                    if (solve(nextStart[0], nextStart[1], colorIdx + 1, [[nextStart[0], nextStart[1]]])) return true;
+                    
+                    grid[nextStart[0]][nextStart[1]] = null;
+                } else {
+                    if (solve(nr, nc, colorIdx, currentPath)) return true;
+                }
+
+                // Откат (Backtrack)
+                grid[nr][nc] = null;
+                currentPath.pop();
+            }
+        }
+        return false;
+    }
+
+    // Запуск
+    grid[0][0] = COLS[0].id;
+    solve(0, 0, 0, [[0, 0]]);
+
+    // 3. Переносим результат в игру
     edG = {};
     currentSolution = {};
-    paths.forEach(p => {
-        if (p.path.length < 2) {
-            // Очищаем одинокие точки с сетки
-            p.path.forEach(([r,c]) => { if(grid[r][c] === p.color) grid[r][c] = null; });
-            return;
-        }
-        const start = p.path[0];
-        const end = p.path[p.path.length - 1];
-        edG[start.join(',')] = p.color;
-        edG[end.join(',')] = p.color;
-        currentSolution[p.color] = p.path.map(c => c.join(','));
-    });
-
+    for (let colId in colorPaths) {
+        const p = colorPaths[colId];
+        const s = p[0], e = p[p.length-1];
+        edG[s.join(',')] = colId;
+        edG[e.join(',')] = colId;
+        currentSolution[colId] = p.map(c => c.join(','));
+    }
+    
     rEdB();
 }
   
